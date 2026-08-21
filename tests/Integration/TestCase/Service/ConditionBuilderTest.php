@@ -8,12 +8,14 @@ use App\Tests\Integration\Common\Entity\TestEntity;
 use App\Tests\Integration\Common\LocaleFilterDTO;
 use App\Tests\Integration\Common\MatchOrNotNullFilterDTO;
 use App\Tests\Integration\Common\TypesFilterDTO;
+use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\Expr\Andx;
 use Doctrine\ORM\Query\Expr\Composite;
 use Doctrine\ORM\Query\Expr\Orx;
 use FilterBundle\Bridge\Doctrine\Orm\Util\QueryNameGenerator;
 use FilterBundle\Service\ConditionBuilder;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -87,10 +89,10 @@ class ConditionBuilderTest extends KernelTestCase
                 }
 
                 foreach ($params as $param) {
-                    $paramName = ':'.$param->getName();
+                    $paramName = ':' . $param->getName();
                     $paramValue = $param->getValue();
 
-                    if ($paramValue instanceof \DateTimeInterface) {
+                    if ($paramValue instanceof DateTimeInterface) {
                         $paramValue = $paramValue->format('Y-m-d');
                     }
 
@@ -334,6 +336,69 @@ class ConditionBuilderTest extends KernelTestCase
             ],
         ];
 
+        yield 'Search by partial strategy escapes percent character' => [
+            'filters' => [
+                'partial' => '100%',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('%', '100\\%', '%')",
+            ],
+        ];
+
+        yield 'Search by partial strategy escapes underscore character' => [
+            'filters' => [
+                'partial' => 'some_value',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('%', 'some\\_value', '%')",
+            ],
+        ];
+
+        yield 'Search by partial strategy escapes backslash character' => [
+            'filters' => [
+                'partial' => 'path\\to',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('%', 'path\\\\to', '%')",
+            ],
+        ];
+
+        yield 'Search by partial strategy escapes multiple special characters' => [
+            'filters' => [
+                'partial' => '50%_off\\sale',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('%', '50\\%\\_off\\\\sale', '%')",
+            ],
+        ];
+
+        yield 'Search by start strategy escapes special characters' => [
+            'filters' => [
+                'start' => '100%_value',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('100\\%\\_value', '%')",
+            ],
+        ];
+
+        yield 'Search by end strategy escapes special characters' => [
+            'filters' => [
+                'end' => '100%_value',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('%', '100\\%\\_value')",
+            ],
+        ];
+
+        yield 'Search by word start strategy escapes special characters' => [
+            'filters' => [
+                'wordStart' => '100%',
+            ],
+            'expectedConditions' => [
+                "a.id LIKE CONCAT('100\\%', '%') OR a.id LIKE CONCAT('% ', '100\\%', '%')",
+            ],
+        ];
+
         yield 'Search by unknown strategy' => [
             'filters' => [
                 'wrongStrategy' => 'one',
@@ -341,7 +406,7 @@ class ConditionBuilderTest extends KernelTestCase
             'expectedConditions' => [],
             'expectedSorts' => [],
             'expectedEmptyConditions' => true,
-            'expectedException' => \InvalidArgumentException::class,
+            'expectedException' => InvalidArgumentException::class,
         ];
 
         yield 'Exclude filter with many values' => [
