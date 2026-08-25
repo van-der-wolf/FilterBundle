@@ -208,6 +208,7 @@ class SearchFilter extends AbstractFilter implements FilterInterface, SearchFilt
             default:
                 throw new InvalidArgumentException(sprintf('strategy %s does not exist.', $strategy));
         }
+
         if (self::STRATEGY_EXACT !== $strategy) {
             $value = $this->escapeLikeValue($value);
         }
